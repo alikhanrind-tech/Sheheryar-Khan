@@ -6,10 +6,10 @@ import { Download, Copy, Check, Sparkles, RefreshCw, AlertCircle } from 'lucide-
 
 interface QRPreviewProps {
   config: QRConfig;
-  onCodeGenerated?: (dataUrl: string, rawContent: string) => void;
+  onSaveToHistory?: (dataUrl: string, rawContent: string) => void;
 }
 
-export function QRPreview({ config, onCodeGenerated }: QRPreviewProps) {
+export function QRPreview({ config, onSaveToHistory }: QRPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [dataUrl, setDataUrl] = useState<string>('');
   const [svgString, setSvgString] = useState<string>('');
@@ -100,17 +100,23 @@ export function QRPreview({ config, onCodeGenerated }: QRPreviewProps) {
         margin: config.margin,
       });
       setSvgString(svg);
-
-      if (onCodeGenerated) {
-        onCodeGenerated(generatedDataUrl, rawContent);
-      }
     } catch (err: unknown) {
       console.error('QR code generation failed:', err);
       setErrorMsg('Content is too long for selected error correction level. Lower correction level or shorten content.');
     } finally {
       setIsGenerating(false);
     }
-  }, [rawContent, config, onCodeGenerated, drawCenterIcon]);
+  }, [
+    rawContent,
+    config.size,
+    config.margin,
+    config.errorCorrectionLevel,
+    config.centerLogo,
+    config.fgColor,
+    config.bgColor,
+    config.transparentBg,
+    drawCenterIcon,
+  ]);
 
   useEffect(() => {
     renderQRCode();
@@ -118,12 +124,18 @@ export function QRPreview({ config, onCodeGenerated }: QRPreviewProps) {
 
   const handleDownloadPNG = async () => {
     if (!dataUrl) return;
+    if (onSaveToHistory && rawContent) {
+      onSaveToHistory(dataUrl, rawContent);
+    }
     const filename = `qrforge-${config.contentType}-${Date.now()}.png`;
     await downloadQRPNG(dataUrl, filename);
   };
 
   const handleDownloadSVG = () => {
     if (!svgString) return;
+    if (onSaveToHistory && rawContent && dataUrl) {
+      onSaveToHistory(dataUrl, rawContent);
+    }
     const filename = `qrforge-${config.contentType}-${Date.now()}.svg`;
     downloadQRSVG(svgString, filename);
   };
@@ -141,6 +153,9 @@ export function QRPreview({ config, onCodeGenerated }: QRPreviewProps) {
 
   const handleCopyImage = async () => {
     if (!canvasRef.current) return;
+    if (onSaveToHistory && rawContent && dataUrl) {
+      onSaveToHistory(dataUrl, rawContent);
+    }
     try {
       canvasRef.current.toBlob(async (blob) => {
         if (!blob) return;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { QRConfig, ContentType, RecentQRItem } from '../../types';
 import { ContentTypeTabs } from './ContentTypeTabs';
 import { ControlInputs } from './ControlInputs';
@@ -6,7 +6,15 @@ import { CustomizationPanel } from './CustomizationPanel';
 import { QRPreview } from './QRPreview';
 import { RecentGenerations } from './RecentGenerations';
 import { QRScanner } from '../QRScanner/QRScanner';
-import { getRecentQRCodes, saveRecentQRCode, deleteRecentQRCode, clearRecentQRCodes, formatQRContent } from '../../utils/qrUtils';
+import {
+  getRecentQRCodes,
+  saveRecentQRCode,
+  deleteRecentQRCode,
+  clearRecentQRCodes,
+  formatQRContent,
+  generateQRDataUrl,
+  QR_SIZE_MAP,
+} from '../../utils/qrUtils';
 import {
   ensureAuthSession,
   saveQRToCloud,
@@ -118,45 +126,65 @@ export function QRGenerator({ appMode: externalMode, onModeChange }: QRGenerator
     setConfig((prev) => ({ ...prev, contentType: type }));
   };
 
-  // Called when code is freshly rendered
-  const handleCodeGenerated = (dataUrl: string, rawContent: string) => {
-    if (!rawContent || rawContent.length < 3) return;
+  // Save a QR code item to local and cloud history
+  const handleSaveToHistory = useCallback(
+    async (customDataUrl?: string, customRawContent?: string) => {
+      const rawContent = customRawContent || formatQRContent(config);
+      if (!rawContent || rawContent.length < 2) return;
 
-    let title = rawContent;
-    if (config.contentType === 'url') {
-      title = config.url || 'Web link';
-    } else if (config.contentType === 'wifi') {
-      title = `WiFi: ${config.wifi.ssid || 'Network'}`;
-    } else if (config.contentType === 'email') {
-      title = `Email: ${config.email.address}`;
-    } else if (config.contentType === 'phone') {
-      title = `Tel: ${config.phone}`;
-    } else if (config.contentType === 'vcard') {
-      title = `Contact: ${config.vcard.firstName} ${config.vcard.lastName}`.trim();
-    } else {
-      title = rawContent.slice(0, 24);
-    }
+      let title = rawContent;
+      if (config.contentType === 'url') {
+        title = config.url || 'Web link';
+      } else if (config.contentType === 'wifi') {
+        title = `WiFi: ${config.wifi.ssid || 'Network'}`;
+      } else if (config.contentType === 'email') {
+        title = `Email: ${config.email.address}`;
+      } else if (config.contentType === 'phone') {
+        title = `Tel: ${config.phone}`;
+      } else if (config.contentType === 'vcard') {
+        title = `Contact: ${config.vcard.firstName} ${config.vcard.lastName}`.trim();
+      } else {
+        title = rawContent.slice(0, 24);
+      }
 
-    const newItem: RecentQRItem = {
-      id: `${config.contentType}-${Date.now()}`,
-      title,
-      contentType: config.contentType,
-      rawContent,
-      dataUrl,
-      timestamp: Date.now(),
-      config: { ...config },
-    };
+      let dataUrl = customDataUrl;
+      if (!dataUrl) {
+        try {
+          dataUrl = await generateQRDataUrl(rawContent, {
+            size: QR_SIZE_MAP[config.size] || 512,
+            margin: config.margin,
+            errorCorrectionLevel: config.centerLogo !== 'none' ? 'H' : config.errorCorrectionLevel,
+            fgColor: config.fgColor,
+            bgColor: config.bgColor,
+            transparentBg: config.transparentBg,
+          });
+        } catch (err) {
+          console.warn('Could not generate dataUrl for history:', err);
+        }
+      }
 
-    const updated = saveRecentQRCode(newItem);
-    setRecentItems(updated);
+      const newItem: RecentQRItem = {
+        id: `${config.contentType}-${Date.now()}`,
+        title,
+        contentType: config.contentType,
+        rawContent,
+        dataUrl: dataUrl || '',
+        timestamp: Date.now(),
+        config: { ...config },
+      };
 
-    // Sync to Firebase Firestore
-    if (currentUser) {
-      saveQRToCloud(newItem, currentUser.uid).catch((err) => {
-        console.warn('Cloud sync error:', err);
-      });
-    }
-  };
+      const updated = saveRecentQRCode(newItem);
+      setRecentItems(updated);
+
+      // Sync to Firebase Firestore
+      if (currentUser) {
+        saveQRToCloud(newItem, currentUser.uid).catch((err) => {
+          console.warn('Cloud sync error:', err);
+        });
+      }
+    },
+    [config, currentUser]
+  );
 
   const handleSelectRecent = (item: RecentQRItem) => {
     setConfig(item.config);
@@ -319,11 +347,12 @@ export function QRGenerator({ appMode: externalMode, onModeChange }: QRGenerator
                   {/* Primary Full Width Trigger */}
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const content = formatQRContent(config);
                       if (content) {
-                        setFeedbackNotice('Updated & rendered!');
-                        setTimeout(() => setFeedbackNotice(null), 2000);
+                        await handleSaveToHistory();
+                        setFeedbackNotice('QR code generated and saved to history!');
+                        setTimeout(() => setFeedbackNotice(null), 2500);
                       }
                     }}
                     id="btn-generate-main"
@@ -338,7 +367,7 @@ export function QRGenerator({ appMode: externalMode, onModeChange }: QRGenerator
                 <div className="lg:col-span-5 h-full">
                   <QRPreview
                     config={config}
-                    onCodeGenerated={handleCodeGenerated}
+                    onSaveToHistory={handleSaveToHistory}
                   />
                 </div>
               </div>
