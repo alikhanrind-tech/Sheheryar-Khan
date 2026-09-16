@@ -1,0 +1,6 @@
+{
+  "name": "QRForge",
+  "description": "Create, scan, and customize QR codes for URLs, text, Wi-Fi, email, and more. Generate, scan via camera or file, and download high-quality QR codes.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

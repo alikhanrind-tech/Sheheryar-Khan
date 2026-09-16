@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "createdAt": { "type": "timestamp" },
+        "lastActive": { "type": "timestamp" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "isAnonymous": { "type": "boolean" }
+      }
+    },
+    "SavedQR": {
+      "collection": "users/{userId}/saved_qrs",
+      "fields": {
+        "title": { "type": "string" },
+        "contentType": { "type": "string" },
+        "rawContent": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "config": { "type": "map" }
+      }
+    },
+    "SharedQR": {
+      "collection": "shared_qrs",
+      "fields": {
+        "title": { "type": "string" },
+        "contentType": { "type": "string" },
+        "rawContent": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "creatorId": { "type": "string" },
+        "config": { "type": "map" }
+      }
+    }
+  },
+  "security": {
+    "users": "Allow authenticated users to read/write their own document and subcollections (request.auth.uid == userId)",
+    "shared_qrs": "Allow public read for anyone. Allow write/create if request.auth != null"
+  }
+}
